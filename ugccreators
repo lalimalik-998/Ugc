@@ -1,0 +1,139 @@
+import streamlit as st
+import sqlite3
+import pandas as pd
+
+# ----------------- UI CONFIGURATION & STYLING -----------------
+st.set_page_config(page_title="UGC Global | Enterprise Marketplace", page_icon="💎", layout="wide")
+
+st.markdown("""
+    <style>
+    .stApp {
+        background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 60%, #020617 100%);
+        color: #f8fafc;
+        font-family: 'Inter', sans-serif;
+    }
+    [data-testid="stSidebar"] {
+        background-color: rgba(9, 13, 22, 0.95);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    div.stButton > button {
+        background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    div.stButton > button:hover {
+        background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
+        box-shadow: 0 6px 25px rgba(168, 85, 247, 0.6);
+        transform: translateY(-2px);
+    }
+    [data-testid="stMetric"] {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 15px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+    }
+    [data-testid="stMetricValue"] {
+        color: #38bdf8 !important;
+        font-weight: 700;
+    }
+    h1, h2, h3 {
+        letter-spacing: -0.5px;
+        font-weight: 700;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ----------------- DATABASE SETUP -----------------
+conn = sqlite3.connect('ugc_marketplace.db', check_same_thread=False)
+c = conn.cursor()
+
+# Create necessary tables
+c.execute('''CREATE TABLE IF NOT EXISTS creator_wallets (
+                creator_email TEXT PRIMARY KEY,
+                balance REAL
+            )''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS platform_earnings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id TEXT,
+                creator_email TEXT,
+                amount_earned REAL
+            )''')
+conn.commit()
+
+# ----------------- SIDEBAR NAVIGATION -----------------
+st.sidebar.markdown("### 💎 UGC GLOBAL PORTAL")
+user_role = st.sidebar.selectbox("Select Role", ["Creator Dashboard", "Brand Portal", "Admin"])
+
+# ----------------- 1. CREATOR DASHBOARD -----------------
+if user_role == "Creator Dashboard":
+    st.header("✨ Creator Earnings & Wallet")
+    c_email = st.text_input("Enter Your Email")
+    
+    if c_email:
+        wallet_df = pd.read_sql(f"SELECT balance FROM creator_wallets WHERE creator_email='{c_email}'", conn)
+        if not wallet_df.empty:
+            bal = wallet_df.iloc[0]['balance']
+            st.metric("Available Balance", f"${bal:.2f}")
+        else:
+            st.metric("Available Balance", "$0.00")
+            
+        st.markdown("### Submit Completed UGC Content")
+        camp_id = st.text_input("Campaign ID")
+        p_share = st.number_input("Payout Amount ($)", min_value=0.0, value=100.0)
+        
+        if st.button("Submit for Verification"):
+            if camp_id:
+                # Simulating split (50% creator, 50% platform cut)
+                creator_share = p_share * 0.5
+                platform_share = p_share * 0.5
+                
+                existing_wallet = pd.read_sql(f"SELECT balance FROM creator_wallets WHERE creator_email='{c_email}'", conn)
+                if existing_wallet.empty:
+                    c.execute("INSERT INTO creator_wallets (creator_email, balance) VALUES (?, ?)", (c_email, creator_share))
+                else:
+                    new_bal = existing_wallet.iloc[0]['balance'] + creator_share
+                    c.execute("UPDATE creator_wallets SET balance=? WHERE creator_email=?", (new_bal, c_email))
+                
+                c.execute("INSERT INTO platform_earnings (campaign_id, creator_email, amount_earned) VALUES (?, ?, ?)", 
+                          (camp_id, c_email, platform_share))
+                
+                conn.commit()
+                st.success(f"Verified! Credited ${creator_share:.2f} to creator wallet. Platform retained ${platform_share:.2f} (50%).")
+            else:
+                st.warning("Please enter a Campaign ID.")
+
+# ----------------- 2. BRAND PORTAL -----------------
+elif user_role == "Brand Portal":
+    st.header("🏢 Brand Campaign Management")
+    st.info("Launch campaigns, review creator video pitches, and manage UGC deliverables.")
+    
+    with st.form("brand_form"):
+        brand_name = st.text_input("Brand Name")
+        campaign_title = st.text_input("Campaign Title")
+        budget = st.number_input("Total Budget ($)", value=1000.0)
+        submitted = st.form_submit_button("Launch Campaign")
+        
+        if submitted:
+            st.success(f"Campaign '{campaign_title}' successfully launched for {brand_name}!")
+
+# ----------------- 3. ADMIN PORTAL -----------------
+elif user_role == "Admin":
+    st.header("⚡ Enterprise Admin Ledger")
+    
+    df_earnings = pd.read_sql("SELECT * FROM platform_earnings", conn)
+    
+    if not df_earnings.empty:
+        total_profit = df_earnings['amount_earned'].sum()
+        st.metric(label="Total Platform Revenue (50% Cuts)", value=f"${total_profit:.2f}")
+        st.markdown("### Transaction Ledger")
+        st.dataframe(df_earnings, use_container_width=True)
+    else:
+        st.info("No revenue metrics available yet.")
