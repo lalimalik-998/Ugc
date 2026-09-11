@@ -28,8 +28,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Users Table (Updated with Bio and Profile Image)
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users_v3 (
         email TEXT PRIMARY KEY,
         password TEXT,
         role TEXT,
@@ -42,7 +41,6 @@ def init_db():
         payout_info TEXT
     )''')
     
-    # Gigs Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS gigs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         worker_email TEXT,
@@ -56,7 +54,6 @@ def init_db():
         is_featured INTEGER DEFAULT 0
     )''')
     
-    # Orders Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         gig_id INTEGER,
@@ -71,7 +68,6 @@ def init_db():
         delivery_proof TEXT
     )''')
     
-    # Chat Messages Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender TEXT,
@@ -82,68 +78,99 @@ def init_db():
     
     conn.commit()
     
-    # Default Admin
-    cursor.execute("SELECT * FROM users WHERE role = 'Admin'")
+    cursor.execute("SELECT * FROM users_v3 WHERE role = 'Admin'")
     if not cursor.fetchone():
-        cursor.execute("INSERT OR IGNORE INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+        cursor.execute("INSERT OR IGNORE INTO users_v3 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                        ("admin@skillbridge.com", hash_password("admin123"), "Admin", "Platform Admin", "+1234567890", "Global", "System Administrator", "", 0.0, "Master Ledger"))
         conn.commit()
     conn.close()
 
 init_db()
 
-# --- CUSTOM CSS STYLING & ANIMATIONS ---
+# --- ADVANCED CUSTOM CSS FOR FIVERR LOOK ---
 st.markdown("""
     <style>
+    /* Main App Background */
     .stApp {
-        background-color: #f8fafc;
+        background-color: #f4f6f8;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #0b221e;
+        color: white;
+    }
+    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    /* Fiverr Cards Styling */
     .fiverr-card {
         background-color: white;
-        padding: 22px;
-        border-radius: 14px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #e4e5e7;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         margin-bottom: 20px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        transition: all 0.3s ease;
     }
     .fiverr-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 20px -3px rgba(0, 112, 83, 0.12);
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0, 112, 83, 0.1);
         border-color: #0b7053;
     }
+    
+    /* Hero Banner */
     .hero-banner {
-        background: linear-gradient(135deg, #0b7053 0%, #002b18 100%);
-        padding: 55px;
+        background: linear-gradient(135deg, #0b7053 0%, #013b28 100%);
+        padding: 50px;
         border-radius: 16px;
         color: white;
         margin-bottom: 30px;
-        box-shadow: 0 10px 25px rgba(11, 112, 83, 0.25);
+        box-shadow: 0 10px 25px rgba(11, 112, 83, 0.2);
         text-align: center;
     }
+    
+    /* Buttons */
+    .stButton>button {
+        background-color: #0b7053;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        padding: 0.5rem 1rem;
+        transition: background 0.2s;
+    }
+    .stButton>button:hover {
+        background-color: #095c43;
+        color: white;
+    }
+
+    /* Chat Bubbles */
     .chat-bubble-sent {
         background-color: #0b7053;
         color: white;
         padding: 12px 18px;
-        border-radius: 16px 16px 0px 16px;
+        border-radius: 14px 14px 0px 14px;
         margin: 8px 0;
         max-width: 70%;
         float: right;
         clear: both;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.08);
     }
     .chat-bubble-recv {
         background-color: #ffffff;
         color: #1e293b;
         padding: 12px 18px;
-        border-radius: 16px 16px 16px 0px;
+        border-radius: 14px 14px 14px 0px;
         margin: 8px 0;
         max-width: 70%;
         float: left;
         clear: both;
         border: 1px solid #e2e8f0;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.05);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -164,8 +191,8 @@ if "admin_commission_rate" not in st.session_state:
 if not st.session_state.logged_in:
     st.markdown("""
         <div class="hero-banner">
-            <h1>✨ SkillBridge Global Marketplace</h1>
-            <p style="font-size: 18px; opacity: 0.9; margin-top: 10px;">Hire top global & Pakistani freelancers or sell your skills securely with live chat & escrow protection.</p>
+            <h1>⚡ SkillBridge Global Marketplace</h1>
+            <p style="font-size: 18px; opacity: 0.9; margin-top: 10px;">Hire top global & Pakistani freelancers or sell your skills securely with escrow protection.</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -179,7 +206,7 @@ if not st.session_state.logged_in:
             if st.button("Sign In to Account", use_container_width=True):
                 conn = get_connection()
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (l_email, hash_password(l_pass)))
+                cursor.execute("SELECT * FROM users_v3 WHERE email = ? AND password = ?", (l_email, hash_password(l_pass)))
                 user = cursor.fetchone()
                 conn.close()
                 
@@ -210,15 +237,14 @@ if not st.session_state.logged_in:
                 role_mapped = "Global Client" if "Client" in r_role else "Worker / Freelancer"
                 conn = get_connection()
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM users WHERE email = ?", (r_email,))
+                cursor.execute("SELECT * FROM users_v3 WHERE email = ?", (r_email,))
                 if cursor.fetchone():
                     st.warning("This email is already registered.")
                 elif not r_name or not r_email or not r_pass or not r_phone:
                     st.error("Please fill out all required fields.")
                 else:
                     full_phone = f"{r_country.split(' ')[0]} {r_phone}"
-                    # Default empty bio and avatar for fast registration
-                    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                    cursor.execute("INSERT INTO users_v3 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                                    (r_email, hash_password(r_pass), role_mapped, r_name, full_phone, r_country, "Hi there! I'm using SkillBridge.", "", 0.0, "Not Set"))
                     conn.commit()
                     conn.close()
@@ -234,24 +260,28 @@ if not st.session_state.logged_in:
 else:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (st.session_state.user_email,))
+    cursor.execute("SELECT * FROM users_v3 WHERE email = ?", (st.session_state.user_email,))
     user_data = cursor.fetchone()
     conn.close()
     
+    if not user_data:
+        st.session_state.logged_in = False
+        st.rerun()
+        
     # Sidebar Navigation Profile Info
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
-    st.sidebar.markdown(f"**Role:** `{st.session_state.user_role}`")
-    st.sidebar.markdown(f"📍 **Location:** `{user_data[5] if user_data else 'Global'}`")
-    st.sidebar.markdown(f"📞 **Phone:** `{user_data[4] if user_data else 'N/A'}`")
+    st.sidebar.markdown(f"**Role:** `{user_data[2]}`")
+    st.sidebar.markdown(f"📍 **Location:** `{user_data[5]}`")
+    st.sidebar.markdown(f"📞 **Phone:** `{user_data[4]}`")
     st.sidebar.markdown(f"💰 **Wallet:** `${user_data[8]:,.2f}`")
     st.sidebar.markdown("---")
     
     menu = []
-    if st.session_state.user_role == "Global Client":
+    if user_data[2] == "Global Client":
         menu = ["🔍 Explore Gigs", "💬 Messages / Inbox", "🛒 My Orders", "👤 Edit Profile", "💳 Billing & Payments"]
-    elif st.session_state.user_role == "Worker / Freelancer":
+    elif user_data[2] == "Worker / Freelancer":
         menu = ["📊 Dashboard", "➕ Create Gig", "💬 Messages / Inbox", "💼 Manage Orders", "👤 Edit Profile", "🏦 Payout Settings"]
-    elif st.session_state.user_role == "Admin":
+    elif user_data[2] == "Admin":
         menu = ["⚡ Admin Revenue Panel", "👥 Manage Users", "📋 Master Ledger"]
         
     choice = st.sidebar.radio("Navigation Menu", menu)
@@ -306,7 +336,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                      (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", reqs, "Pending Delivery"))
-                        cursor.execute("UPDATE users SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
+                        cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
                         conn.commit()
                         conn.close()
                         st.success("Order placed successfully! Funds secured in Escrow.")
@@ -317,8 +347,8 @@ else:
         st.markdown("<h2>Manage Your Profile</h2>", unsafe_allow_html=True)
         st.write("Aap jab chahein apni profile photo aur bio update kar sakte hain.")
         
-        current_bio = user_data[6] if user_data and user_data[6] else ""
-        current_avatar = user_data[7] if user_data and user_data[7] else ""
+        current_bio = user_data[6] if user_data[6] else ""
+        current_avatar = user_data[7] if user_data[7] else ""
         
         if current_avatar and os.path.exists(current_avatar):
             st.image(current_avatar, width=150)
@@ -337,7 +367,7 @@ else:
                 
                 conn = get_connection()
                 cursor = conn.cursor()
-                cursor.execute("UPDATE users SET bio = ?, avatar_path = ? WHERE email = ?", (new_bio, avatar_path, st.session_state.user_email))
+                cursor.execute("UPDATE users_v3 SET bio = ?, avatar_path = ? WHERE email = ?", (new_bio, avatar_path, st.session_state.user_email))
                 conn.commit()
                 conn.close()
                 st.success("Profile updated successfully!")
@@ -349,7 +379,7 @@ else:
         
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM users WHERE name != ?", (st.session_state.current_user,))
+        cursor.execute("SELECT name FROM users_v3 WHERE name != ?", (st.session_state.current_user,))
         all_users = [row[0] for row in cursor.fetchall()]
         conn.close()
         
@@ -434,7 +464,7 @@ else:
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute("UPDATE orders SET status = 'Completed' WHERE id = ?", (o_id,))
-                        cursor.execute("UPDATE users SET wallet = wallet + ? WHERE name = ?", (payout, worker))
+                        cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE name = ?", (payout, worker))
                         conn.commit()
                         conn.close()
                         st.success("Order completed! Funds released to worker.")
@@ -534,7 +564,7 @@ else:
                     formatted_payout = f"Method: {method} | Holder: {account_holder} | Account/IBAN: {account_number}"
                     conn = get_connection()
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE users SET payout_info = ? WHERE email = ?", (formatted_payout, st.session_state.user_email))
+                    cursor.execute("UPDATE users_v3 SET payout_info = ? WHERE email = ?", (formatted_payout, st.session_state.user_email))
                     conn.commit()
                     conn.close()
                     st.success("Payout details updated successfully!")
@@ -547,12 +577,12 @@ else:
         st.markdown("<h2>Super Admin Revenue Dashboard</h2>", unsafe_allow_html=True)
         conn = get_connection()
         cursor = conn.cursor()
-        admin_bal = cursor.execute("SELECT wallet FROM users WHERE role = 'Admin'").fetchone()[0]
+        admin_bal = cursor.execute("SELECT wallet FROM users_v3 WHERE role = 'Admin'").fetchone()[0]
         
         c1, c2, c3 = st.columns(3)
         c1.metric("Admin Revenue Earned", f"${admin_bal:,.2f}")
         c2.metric("Commission Rate", f"{int(st.session_state.admin_commission_rate * 100)}%")
-        c3.metric("Total Users", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        c3.metric("Total Users", cursor.execute("SELECT COUNT(*) FROM users_v3").fetchone()[0])
         
         st.markdown("---")
         with st.form("admin_conf"):
@@ -569,7 +599,7 @@ else:
     elif choice == "👥 Manage Users":
         st.markdown("<h2>All Platform Users</h2>", unsafe_allow_html=True)
         conn = get_connection()
-        users_df = pd.read_sql("SELECT email, role, name, phone, country, wallet FROM users", conn)
+        users_df = pd.read_sql("SELECT email, role, name, phone, country, wallet FROM users_v3", conn)
         st.dataframe(users_df, use_container_width=True)
         conn.close()
         
