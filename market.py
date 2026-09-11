@@ -178,6 +178,8 @@ if "admin_commission_rate" not in st.session_state:
     st.session_state.admin_commission_rate = 0.15
 if "chat_target" not in st.session_state:
     st.session_state.chat_target = None
+if "active_nav" not in st.session_state:
+    st.session_state.active_nav = None
 
 # ==================== AUTHENTICATION / LOGIN PAGE ====================
 if not st.session_state.logged_in:
@@ -276,7 +278,13 @@ else:
     elif user_data[2] == "Admin":
         menu = ["⚡ Admin Revenue Panel", "👥 Manage Users", "📋 Master Ledger"]
         
-    choice = st.sidebar.radio("Navigation Menu", menu)
+    # Default selection handling if redirected via button
+    default_choice_idx = 0
+    if st.session_state.active_nav in menu:
+        default_choice_idx = menu.index(st.session_state.active_nav)
+        st.session_state.active_nav = None # Reset after applying
+        
+    choice = st.sidebar.radio("Navigation Menu", menu, index=default_choice_idx)
     st.sidebar.markdown("---")
     if st.sidebar.button("🚪 Logout", use_container_width=True):
         st.session_state.logged_in = False
@@ -340,6 +348,7 @@ else:
                             conn.close()
                             
                             st.session_state.chat_target = w_name
+                            st.session_state.active_nav = "💬 Messages / Inbox"
                             st.success("Order placed successfully! Redirecting to chat with seller...")
                             st.rerun()
                             
@@ -355,6 +364,7 @@ else:
                             conn.commit()
                             conn.close()
                             
+                            st.session_state.active_nav = "💬 Messages / Inbox"
                             st.success(f"Opening direct chat with {w_name}...")
                             st.rerun()
 
@@ -395,7 +405,7 @@ else:
         
         conn = get_connection()
         cursor = conn.cursor()
-        # Exclude Platform Admin completely from normal user chats
+        # Strictly exclude Platform Admin from standard user list
         cursor.execute("SELECT name FROM users_v3 WHERE name != ? AND role != 'Admin'", (st.session_state.current_user,))
         all_users = [row[0] for row in cursor.fetchall()]
         
@@ -490,6 +500,7 @@ else:
                 with col_o1:
                     if st.button(f"💬 Chat with Seller ({worker})", key=f"order_chat_{o_id}"):
                         st.session_state.chat_target = worker
+                        st.session_state.active_nav = "💬 Messages / Inbox"
                         st.success(f"Redirecting to chat with {worker}...")
                         st.rerun()
                 with col_o2:
@@ -540,6 +551,7 @@ else:
                 
                 if st.button(f"💬 Chat with Client ({client})", key=f"worker_chat_{o_id}"):
                     st.session_state.chat_target = client
+                    st.session_state.active_nav = "💬 Messages / Inbox"
                     st.success(f"Redirecting to chat with {client}...")
                     st.rerun()
                 
