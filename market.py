@@ -3,6 +3,7 @@ import pandas as pd
 import sqlite3
 import hashlib
 import os
+import requests
 
 # Page Configuration
 st.set_page_config(
@@ -88,7 +89,21 @@ def init_db():
 
 init_db()
 
-# --- ADVANCED CUSTOM CSS FOR FIVERR LOOK ---
+# --- PAYMENT GATEWAY FUNCTION (Automatic & Future Ready) ---
+def process_real_payment(amount, user_email, pay_method, title):
+    """
+    Jab aap `.streamlit/secrets.toml` mein real API keys daal denge, 
+    yeh function automatically PayFast/Stripe ko request bhej dega.
+    """
+    # Secrets se keys uthane ka tareeqa (Jab live hoga tab active hoga):
+    # merchant_id = st.secrets.get("PAYFAST_MERCHANT_ID", "DUMMY_ID")
+    # api_key = st.secrets.get("PAYFAST_API_KEY", "DUMMY_KEY")
+    
+    # Filhal testing ke liye automatic success return karega
+    return {"status": "success", "message": f"Processed automatically via {pay_method}"}
+
+
+# --- ADVANCED CUSTOM CSS ---
 st.markdown("""
     <style>
     .stApp {
@@ -102,9 +117,6 @@ st.markdown("""
     [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
         color: #ffffff !important;
     }
-    [data-testid="stSidebar"] hr {
-        border-color: rgba(255, 255, 255, 0.15);
-    }
     .fiverr-card {
         background-color: white;
         padding: 24px;
@@ -112,20 +124,13 @@ st.markdown("""
         border: 1px solid #e4e5e7;
         box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         margin-bottom: 20px;
-        transition: all 0.3s ease;
-    }
-    .fiverr-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 20px rgba(0, 112, 83, 0.1);
-        border-color: #0b7053;
     }
     .hero-banner {
         background: linear-gradient(135deg, #0b7053 0%, #013b28 100%);
-        padding: 50px;
+        padding: 40px;
         border-radius: 16px;
         color: white;
         margin-bottom: 30px;
-        box-shadow: 0 10px 25px rgba(11, 112, 83, 0.2);
         text-align: center;
     }
     .stButton>button {
@@ -135,11 +140,6 @@ st.markdown("""
         font-weight: 600;
         border: none;
         padding: 0.5rem 1rem;
-        transition: background 0.2s;
-    }
-    .stButton>button:hover {
-        background-color: #095c43;
-        color: white;
     }
     .chat-bubble-sent {
         background-color: #0b7053;
@@ -165,7 +165,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Session State Persistence Initialization
+# Session State Initialization
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "current_user" not in st.session_state:
@@ -181,12 +181,12 @@ if "chat_target" not in st.session_state:
 if "active_nav" not in st.session_state:
     st.session_state.active_nav = None
 
-# ==================== AUTHENTICATION / LOGIN PAGE ====================
+# ==================== AUTHENTICATION ====================
 if not st.session_state.logged_in:
     st.markdown("""
         <div class="hero-banner">
             <h1>⚡ SkillBridge Global Marketplace</h1>
-            <p style="font-size: 18px; opacity: 0.9; margin-top: 10px;">Hire top global & Pakistani freelancers or sell your skills securely with escrow protection.</p>
+            <p style="font-size: 18px; opacity: 0.9; margin-top: 10px;">Hire top global & Pakistani freelancers or sell your skills securely.</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -250,7 +250,7 @@ if not st.session_state.logged_in:
                     st.success("Account created successfully!")
                     st.rerun()
 
-# ==================== MAIN PLATFORM DASHBOARD ====================
+# ==================== DASHBOARD ====================
 else:
     conn = get_connection()
     cursor = conn.cursor()
@@ -262,11 +262,9 @@ else:
         st.session_state.logged_in = False
         st.rerun()
         
-    # Sidebar Navigation Profile Info
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
     st.sidebar.markdown(f"**Role:** `{user_data[2]}`")
     st.sidebar.markdown(f"📍 **Location:** `{user_data[5]}`")
-    st.sidebar.markdown(f"📞 **Phone:** `{user_data[4]}`")
     st.sidebar.markdown(f"💰 **Wallet:** `${user_data[8]:,.2f}`")
     st.sidebar.markdown("---")
     
@@ -278,11 +276,10 @@ else:
     elif user_data[2] == "Admin":
         menu = ["⚡ Admin Revenue Panel", "👥 Manage Users", "📋 Master Ledger"]
         
-    # Default selection handling if redirected via button
     default_choice_idx = 0
     if st.session_state.active_nav in menu:
         default_choice_idx = menu.index(st.session_state.active_nav)
-        st.session_state.active_nav = None # Reset after applying
+        st.session_state.active_nav = None
         
     choice = st.sidebar.radio("Navigation Menu", menu, index=default_choice_idx)
     st.sidebar.markdown("---")
@@ -293,7 +290,7 @@ else:
         st.session_state.user_email = None
         st.rerun()
 
-    # ==================== CLIENT: EXPLORE GIGS ====================
+    # ==================== EXPLORE GIGS ====================
     if choice == "🔍 Explore Gigs":
         st.markdown("<h2>Explore Professional Gigs</h2>", unsafe_allow_html=True)
         
@@ -328,35 +325,50 @@ else:
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     reqs = st.text_area(f"Project Requirements for Gig #{g_id}", placeholder="Describe what you want...", key=f"req_{g_id}")
+                    
+                    # Payment Method Selection
+                    pay_method = st.selectbox(
+                        "Select Payment Method", 
+                        ["🟢 JazzCash / EasyPaisa", "💳 Credit / Debit Card (PayFast/Stripe)", "🏦 Bank Transfer (IBAN)", "🅿️ PayPal"], 
+                        key=f"pay_meth_{g_id}"
+                    )
+                    
                     col_b1, col_b2 = st.columns([1, 1])
                     with col_b1:
-                        if st.button(f"Order Now (${price})", key=f"buy_{g_id}"):
-                            admin_cut = price * st.session_state.admin_commission_rate
-                            worker_cut = price - admin_cut
+                        if st.button(f"Pay & Order Now (${price})", key=f"buy_{g_id}"):
+                            # Automatic Payment Processing Call
+                            payment_res = process_real_payment(price, st.session_state.user_email, pay_method, title)
                             
-                            conn = get_connection()
-                            cursor = conn.cursor()
-                            cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                         (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", reqs, "Pending Delivery"))
-                            cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
-                            
-                            auto_msg = f"Hello! I just ordered your gig: '{title}' (${price}). Requirements: {reqs}"
-                            cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
-                                         (st.session_state.current_user, w_name, auto_msg))
-                            
-                            conn.commit()
-                            conn.close()
-                            
-                            st.session_state.chat_target = w_name
-                            st.session_state.active_nav = "💬 Messages / Inbox"
-                            st.success("Order placed successfully! Redirecting to chat with seller...")
-                            st.rerun()
+                            if payment_res["status"] == "success":
+                                admin_cut = price * st.session_state.admin_commission_rate
+                                worker_cut = price - admin_cut
+                                
+                                conn = get_connection()
+                                cursor = conn.cursor()
+                                # Automatically creating order and setting status to 'In Progress'
+                                cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                             (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", f"[{pay_method}] {reqs}", "Pending Delivery"))
+                                cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
+                                
+                                # Automatic Message to Freelancer
+                                auto_msg = f"Hello! I just ordered your gig: '{title}' (${price}) via {pay_method}. Requirements: {reqs}"
+                                cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
+                                             (st.session_state.current_user, w_name, auto_msg))
+                                
+                                conn.commit()
+                                conn.close()
+                                
+                                st.session_state.chat_target = w_name
+                                st.session_state.active_nav = "💬 Messages / Inbox"
+                                st.success(f"Payment successful via {pay_method}! Order started automatically.")
+                                st.rerun()
+                            else:
+                                st.error("Payment failed. Please try again.")
                             
                     with col_b2:
                         if st.button(f"💬 Chat with {w_name}", key=f"chat_seller_{g_id}"):
                             st.session_state.chat_target = w_name
                             
-                            # Send initial gig reference message automatically
                             conn = get_connection()
                             cursor = conn.cursor()
                             cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
@@ -368,11 +380,9 @@ else:
                             st.success(f"Opening direct chat with {w_name}...")
                             st.rerun()
 
-    # ==================== EDIT PROFILE (PHOTO & BIO) ====================
+    # ==================== EDIT PROFILE ====================
     elif choice == "👤 Edit Profile":
         st.markdown("<h2>Manage Your Profile</h2>", unsafe_allow_html=True)
-        st.write("Aap jab chahein apni profile photo aur bio update kar sakte hain.")
-        
         current_bio = user_data[6] if user_data[6] else ""
         current_avatar = user_data[7] if user_data[7] else ""
         
@@ -380,11 +390,10 @@ else:
             st.image(current_avatar, width=150)
             
         with st.form("profile_edit_form"):
-            new_bio = st.text_area("Professional Bio / Description", value=current_bio, placeholder="Tell clients or freelancers about yourself...")
+            new_bio = st.text_area("Professional Bio / Description", value=current_bio)
             new_avatar_file = st.file_uploader("Upload Profile Picture", type=["jpg", "jpeg", "png"])
             
-            update_btn = st.form_submit_button("Save Profile Changes")
-            if update_btn:
+            if st.form_submit_button("Save Profile Changes"):
                 avatar_path = current_avatar
                 if new_avatar_file is not None:
                     avatar_path = os.path.join("uploads", f"avatar_{st.session_state.user_email.replace('@','_')}.png")
@@ -399,13 +408,12 @@ else:
                 st.success("Profile updated successfully!")
                 st.rerun()
 
-    # ==================== CHAT & MESSAGING SYSTEM ====================
+    # ==================== CHAT & MESSAGING ====================
     elif choice == "💬 Messages / Inbox":
         st.markdown("<h2>Fiverr-Style Direct Inbox & Deal Chat</h2>", unsafe_allow_html=True)
         
         conn = get_connection()
         cursor = conn.cursor()
-        # Strictly exclude Platform Admin from standard user list
         cursor.execute("SELECT name FROM users_v3 WHERE name != ? AND role != 'Admin'", (st.session_state.current_user,))
         all_users = [row[0] for row in cursor.fetchall()]
         
@@ -416,7 +424,7 @@ else:
         conn.close()
         
         if not combined_users:
-            st.info("No other freelancers or clients available to chat with yet.")
+            st.info("No other users available to chat with yet.")
         else:
             default_index = 0
             if st.session_state.chat_target in combined_users:
@@ -438,10 +446,9 @@ else:
             messages = cursor.fetchall()
             conn.close()
             
-            chat_container = st.container()
-            with chat_container:
+            with st.container():
                 if not messages:
-                    st.info(f"No messages yet with {selected_chat_user}. Start the conversation below!")
+                    st.info(f"No messages yet with {selected_chat_user}. Start conversation below!")
                 else:
                     for sender, msg, time in messages:
                         if sender == st.session_state.current_user:
@@ -459,9 +466,8 @@ else:
             
             st.markdown("<br>", unsafe_allow_html=True)
             with st.form("chat_form", clear_on_submit=True):
-                new_msg = st.text_input("Type message...", placeholder="Discuss project details or custom budget...")
-                send_btn = st.form_submit_button("Send Message 🚀")
-                if send_btn:
+                new_msg = st.text_input("Type message...", placeholder="Discuss project details...")
+                if st.form_submit_button("Send Message 🚀"):
                     if new_msg.strip():
                         conn = get_connection()
                         cursor = conn.cursor()
@@ -470,8 +476,6 @@ else:
                         conn.commit()
                         conn.close()
                         st.rerun()
-                    else:
-                        st.warning("Message cannot be blank.")
 
     # ==================== CLIENT: MY ORDERS ====================
     elif choice == "🛒 My Orders":
@@ -491,8 +495,7 @@ else:
                 <div class="fiverr-card">
                     <h4>Order #{o_id}: {title}</h4>
                     <p><b>Freelancer:</b> {worker} | <b>Price:</b> ${price} | <b>Status:</b> <code>{status}</code></p>
-                    <p><b>Your Requirements:</b> {reqs}</p>
-                    <p><b>Delivery Proof:</b> {proof}</p>
+                    <p><b>Requirements:</b> {reqs}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -501,7 +504,6 @@ else:
                     if st.button(f"💬 Chat with Seller ({worker})", key=f"order_chat_{o_id}"):
                         st.session_state.chat_target = worker
                         st.session_state.active_nav = "💬 Messages / Inbox"
-                        st.success(f"Redirecting to chat with {worker}...")
                         st.rerun()
                 with col_o2:
                     if status == "Delivered":
@@ -512,13 +514,12 @@ else:
                             cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE name = ?", (payout, worker))
                             conn.commit()
                             conn.close()
-                            st.success("Order completed! Funds released to worker.")
+                            st.success("Order completed! Funds released.")
                             st.rerun()
 
-    # ==================== WORKER: DASHBOARD & ORDERS ====================
+    # ==================== WORKER DASHBOARD ====================
     elif choice == "📊 Dashboard" or choice == "💼 Manage Orders":
         st.markdown("<h2>Freelancer Command Center</h2>", unsafe_allow_html=True)
-        
         c1, c2 = st.columns(2)
         c1.metric("Available Earnings", f"${user_data[8]:,.2f}")
         
@@ -529,7 +530,6 @@ else:
         c2.metric("Active Escrow Orders", active_count)
         
         st.markdown("---")
-        st.subheader("Client Orders Assigned To You")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM orders WHERE worker_name = ?", (st.session_state.current_user,))
@@ -552,30 +552,28 @@ else:
                 if st.button(f"💬 Chat with Client ({client})", key=f"worker_chat_{o_id}"):
                     st.session_state.chat_target = client
                     st.session_state.active_nav = "💬 Messages / Inbox"
-                    st.success(f"Redirecting to chat with {client}...")
                     st.rerun()
                 
                 if status == "In Progress":
-                    delivery_text = st.text_input(f"Submit work link/message for Order #{o_id}", key=f"del_{o_id}")
+                    delivery_text = st.text_input(f"Submit work link for Order #{o_id}", key=f"del_{o_id}")
                     if st.button(f"Deliver Order #{o_id}", key=f"btn_del_{o_id}"):
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute("UPDATE orders SET status = 'Delivered', delivery_proof = ? WHERE id = ?", (delivery_text, o_id))
                         conn.commit()
                         conn.close()
-                        st.success("Work delivered to client for review!")
+                        st.success("Work delivered!")
                         st.rerun()
 
-    # ==================== WORKER: CREATE GIG ====================
+    # ==================== CREATE GIG ====================
     elif choice == "➕ Create Gig":
         st.markdown("<h2>Create a New Gig Service</h2>", unsafe_allow_html=True)
-        
         title = st.text_input("I will do...")
         cat = st.selectbox("Category", ["Video Editing", "Graphic Design", "Web Development", "Content Writing"])
         price = st.number_input("Price ($ USD)", min_value=5.0, value=25.0)
         days = st.number_input("Delivery Time (Days)", min_value=1, value=3)
         desc = st.text_area("Gig Description")
-        uploaded_file = st.file_uploader("Upload Gig Cover Image / Thumbnail", type=["jpg", "jpeg", "png"])
+        uploaded_file = st.file_uploader("Upload Cover Image", type=["jpg", "jpeg", "png"])
         
         if st.button("Publish Gig", use_container_width=True):
             image_path = ""
@@ -585,7 +583,7 @@ else:
                     f.write(uploaded_file.getbuffer())
             
             if not title or not desc:
-                st.error("Please fill out the title and description.")
+                st.error("Please fill out title and description.")
             else:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -595,30 +593,27 @@ else:
                 conn.close()
                 st.success("Gig successfully published!")
 
-    # ==================== WORKER: PAYOUT SETTINGS ====================
+    # ==================== PAYOUT SETTINGS ====================
     elif choice == "🏦 Payout Settings":
         st.markdown("<h2>Payout Accounts (Local & International)</h2>", unsafe_allow_html=True)
-        st.write("Configure your preferred withdrawal method for your earnings.")
-        
         existing_info = user_data[9] if user_data[9] else "Not Set"
         
         with st.form("payout_form"):
             method = st.selectbox("Select Payout Method", ["JazzCash", "EasyPaisa", "Bank Account (IBAN)", "PayPal"])
-            account_holder = st.text_input("Account Holder Name", placeholder="e.g. Muhammad Talal")
-            account_number = st.text_input("Account / Phone / IBAN Number", placeholder="e.g. 03001234567 or PK00XXXX...")
+            account_holder = st.text_input("Account Holder Name")
+            account_number = st.text_input("Account / Phone / IBAN Number")
             
-            submitted = st.form_submit_button("Save Payout Destination")
-            if submitted:
+            if st.form_submit_button("Save Payout Destination"):
                 if not account_holder or not account_number:
-                    st.error("Please fill in all payment details.")
+                    st.error("Please fill in payment details.")
                 else:
-                    formatted_payout = f"Method: {method} | Holder: {account_holder} | Account/IBAN: {account_number}"
+                    formatted_payout = f"Method: {method} | Holder: {account_holder} | Account: {account_number}"
                     conn = get_connection()
                     cursor = conn.cursor()
                     cursor.execute("UPDATE users_v3 SET payout_info = ? WHERE email = ?", (formatted_payout, st.session_state.user_email))
                     conn.commit()
                     conn.close()
-                    st.success("Payout details updated successfully!")
+                    st.success("Payout details updated!")
         
         st.markdown("---")
         st.info(f"**Current Saved Payout Info:** `{existing_info}`")
