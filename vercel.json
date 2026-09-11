@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "market.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "(.*)",
+      "destination": "market.py"
+    }
+  ]
+}
