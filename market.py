@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Ensure uploads directory exists for gig images
+# Ensure uploads directory exists
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
@@ -28,17 +28,21 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Users Table
+    # Users Table (Updated with Bio and Profile Image)
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
         email TEXT PRIMARY KEY,
         password TEXT,
         role TEXT,
         name TEXT,
+        phone TEXT,
+        country TEXT,
+        bio TEXT,
+        avatar_path TEXT,
         wallet REAL,
         payout_info TEXT
     )''')
     
-    # Gigs Table (Added image_path column)
+    # Gigs Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS gigs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         worker_email TEXT,
@@ -52,7 +56,7 @@ def init_db():
         is_featured INTEGER DEFAULT 0
     )''')
     
-    # Orders Table (Fiverr Style Tracking)
+    # Orders Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         gig_id INTEGER,
@@ -67,39 +71,79 @@ def init_db():
         delivery_proof TEXT
     )''')
     
+    # Chat Messages Table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender TEXT,
+        receiver TEXT,
+        message TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
     conn.commit()
     
     # Default Admin
     cursor.execute("SELECT * FROM users WHERE role = 'Admin'")
     if not cursor.fetchone():
-        cursor.execute("INSERT OR IGNORE INTO users VALUES (?, ?, ?, ?, ?, ?)", 
-                       ("admin@skillbridge.com", hash_password("admin123"), "Admin", "Platform Admin", 0.0, "Master Ledger"))
+        cursor.execute("INSERT OR IGNORE INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                       ("admin@skillbridge.com", hash_password("admin123"), "Admin", "Platform Admin", "+1234567890", "Global", "System Administrator", "", 0.0, "Master Ledger"))
         conn.commit()
     conn.close()
 
 init_db()
 
-# --- CUSTOM CSS STYLING (Fiverr Look & Feel) ---
+# --- CUSTOM CSS STYLING & ANIMATIONS ---
 st.markdown("""
     <style>
     .stApp {
-        background-color: #f7f7f7;
+        background-color: #f8fafc;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .fiverr-card {
         background-color: white;
-        padding: 20px;
-        border-radius: 8px;
-        border: 1px solid #e4e5e7;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
+        padding: 22px;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .fiverr-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 20px -3px rgba(0, 112, 83, 0.12);
+        border-color: #0b7053;
     }
     .hero-banner {
-        background: linear-gradient(135deg, #0b7053 0%, #003912 100%);
-        padding: 40px;
-        border-radius: 10px;
+        background: linear-gradient(135deg, #0b7053 0%, #002b18 100%);
+        padding: 55px;
+        border-radius: 16px;
         color: white;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 25px rgba(11, 112, 83, 0.25);
+        text-align: center;
+    }
+    .chat-bubble-sent {
+        background-color: #0b7053;
+        color: white;
+        padding: 12px 18px;
+        border-radius: 16px 16px 0px 16px;
+        margin: 8px 0;
+        max-width: 70%;
+        float: right;
+        clear: both;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+    }
+    .chat-bubble-recv {
+        background-color: #ffffff;
+        color: #1e293b;
+        padding: 12px 18px;
+        border-radius: 16px 16px 16px 0px;
+        margin: 8px 0;
+        max-width: 70%;
+        float: left;
+        clear: both;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.05);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -119,20 +163,20 @@ if "admin_commission_rate" not in st.session_state:
 # ==================== AUTHENTICATION / LOGIN PAGE ====================
 if not st.session_state.logged_in:
     st.markdown("""
-        <div class="hero-banner" style="text-align: center;">
-            <h1>Find the perfect freelance services for your business</h1>
-            <p>Connect with global & Pakistani talent, earn in dollars securely with automated escrow.</p>
+        <div class="hero-banner">
+            <h1>✨ SkillBridge Global Marketplace</h1>
+            <p style="font-size: 18px; opacity: 0.9; margin-top: 10px;">Hire top global & Pakistani freelancers or sell your skills securely with live chat & escrow protection.</p>
         </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Join SkillBridge"])
+        tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Quick Signup"])
         
         with tab1:
-            l_email = st.text_input("Email", key="l_email")
+            l_email = st.text_input("Email Address", key="l_email")
             l_pass = st.text_input("Password", type="password", key="l_pass")
-            if st.button("Continue", use_container_width=True):
+            if st.button("Sign In to Account", use_container_width=True):
                 conn = get_connection()
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (l_email, hash_password(l_pass)))
@@ -144,38 +188,46 @@ if not st.session_state.logged_in:
                     st.session_state.user_email = user[0]
                     st.session_state.user_role = user[2]
                     st.session_state.current_user = user[3]
-                    st.success("Welcome back!")
+                    st.success("Login Successful!")
                     st.rerun()
                 else:
-                    st.error("Invalid credentials.")
+                    st.error("Invalid email or password.")
                     
         with tab2:
             r_name = st.text_input("Full Name", key="r_name")
-            r_email = st.text_input("Email", key="r_email_reg")
+            r_email = st.text_input("Email Address", key="r_email_reg")
             r_pass = st.text_input("Password", type="password", key="r_pass_reg")
-            r_role = st.selectbox("I want to:", ["Hire Freelancers (Client)", "Sell Services (Freelancer)"])
             
-            if st.button("Register Now", use_container_width=True):
+            c_col1, c_col2 = st.columns([1, 2])
+            with c_col1:
+                r_country = st.selectbox("Country", ["🇵🇰 Pakistan (+92)", "🇺🇸 USA (+1)", "🇬🇧 UK (+44)", "🇦🇪 UAE (+971)", "🇸🇦 KSA (+966)", "🌍 Other"])
+            with c_col2:
+                r_phone = st.text_input("Phone Number", placeholder="3001234567")
+                
+            r_role = st.selectbox("I want to join as:", ["Hire Freelancers (Client)", "Sell Services (Freelancer)"])
+            
+            if st.button("Create Account", use_container_width=True):
                 role_mapped = "Global Client" if "Client" in r_role else "Worker / Freelancer"
                 conn = get_connection()
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE email = ?", (r_email,))
                 if cursor.fetchone():
-                    st.warning("Email already registered.")
-                elif not r_name or not r_email or not r_pass:
-                    st.error("Fill out all fields.")
+                    st.warning("This email is already registered.")
+                elif not r_name or not r_email or not r_pass or not r_phone:
+                    st.error("Please fill out all required fields.")
                 else:
-                    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", 
-                                   (r_email, hash_password(r_pass), role_mapped, r_name, 0.0, "Not Set"))
+                    full_phone = f"{r_country.split(' ')[0]} {r_phone}"
+                    # Default empty bio and avatar for fast registration
+                    cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                                   (r_email, hash_password(r_pass), role_mapped, r_name, full_phone, r_country, "Hi there! I'm using SkillBridge.", "", 0.0, "Not Set"))
                     conn.commit()
                     conn.close()
                     
-                    # Auto login upon registration and direct access to dashboard
                     st.session_state.logged_in = True
                     st.session_state.user_email = r_email
                     st.session_state.user_role = role_mapped
                     st.session_state.current_user = r_name
-                    st.success("Account created successfully! Redirecting to dashboard...")
+                    st.success("Account created successfully!")
                     st.rerun()
 
 # ==================== MAIN PLATFORM DASHBOARD ====================
@@ -186,17 +238,19 @@ else:
     user_data = cursor.fetchone()
     conn.close()
     
-    # Sidebar Navigation
+    # Sidebar Navigation Profile Info
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
     st.sidebar.markdown(f"**Role:** `{st.session_state.user_role}`")
-    st.sidebar.markdown(f"💰 **Wallet:** `${user_data[4]:,.2f}`")
+    st.sidebar.markdown(f"📍 **Location:** `{user_data[5] if user_data else 'Global'}`")
+    st.sidebar.markdown(f"📞 **Phone:** `{user_data[4] if user_data else 'N/A'}`")
+    st.sidebar.markdown(f"💰 **Wallet:** `${user_data[8]:,.2f}`")
     st.sidebar.markdown("---")
     
     menu = []
     if st.session_state.user_role == "Global Client":
-        menu = ["🔍 Explore Gigs", "🛒 My Orders", "💳 Billing & Payments"]
+        menu = ["🔍 Explore Gigs", "💬 Messages / Inbox", "🛒 My Orders", "👤 Edit Profile", "💳 Billing & Payments"]
     elif st.session_state.user_role == "Worker / Freelancer":
-        menu = ["📊 Dashboard", "➕ Create Gig", "💼 Manage Orders", "🏦 Payout Settings"]
+        menu = ["📊 Dashboard", "➕ Create Gig", "💬 Messages / Inbox", "💼 Manage Orders", "👤 Edit Profile", "🏦 Payout Settings"]
     elif st.session_state.user_role == "Admin":
         menu = ["⚡ Admin Revenue Panel", "👥 Manage Users", "📋 Master Ledger"]
         
@@ -220,7 +274,7 @@ else:
         conn.close()
         
         if not gigs:
-            st.info("No gigs available right now.")
+            st.info("No gigs published yet.")
         else:
             for g in gigs:
                 g_id, w_email, w_name, title, cat, price, desc, days, img_path, feat = g
@@ -231,9 +285,9 @@ else:
                     
                     with cols[0]:
                         if img_path and os.path.exists(img_path):
-                            st.image(img_path, use_column_width=True)
+                            st.image(img_path, use_container_width=True)
                         else:
-                            st.image("https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=500&q=80", use_column_width=True)
+                            st.image("https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=500&q=80", use_container_width=True)
                             
                     with cols[1]:
                         st.markdown(f"### {title}")
@@ -255,8 +309,102 @@ else:
                         cursor.execute("UPDATE users SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
                         conn.commit()
                         conn.close()
-                        st.success("Order placed successfully! Funds are secured in Escrow.")
+                        st.success("Order placed successfully! Funds secured in Escrow.")
                         st.rerun()
+
+    # ==================== EDIT PROFILE (PHOTO & BIO) ====================
+    elif choice == "👤 Edit Profile":
+        st.markdown("<h2>Manage Your Profile</h2>", unsafe_allow_html=True)
+        st.write("Aap jab chahein apni profile photo aur bio update kar sakte hain.")
+        
+        current_bio = user_data[6] if user_data and user_data[6] else ""
+        current_avatar = user_data[7] if user_data and user_data[7] else ""
+        
+        if current_avatar and os.path.exists(current_avatar):
+            st.image(current_avatar, width=150)
+            
+        with st.form("profile_edit_form"):
+            new_bio = st.text_area("Professional Bio / Description", value=current_bio, placeholder="Tell clients or freelancers about yourself...")
+            new_avatar_file = st.file_uploader("Upload Profile Picture", type=["jpg", "jpeg", "png"])
+            
+            update_btn = st.form_submit_button("Save Profile Changes")
+            if update_btn:
+                avatar_path = current_avatar
+                if new_avatar_file is not None:
+                    avatar_path = os.path.join("uploads", f"avatar_{st.session_state.user_email.replace('@','_')}.png")
+                    with open(avatar_path, "wb") as f:
+                        f.write(new_avatar_file.getbuffer())
+                
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET bio = ?, avatar_path = ? WHERE email = ?", (new_bio, avatar_path, st.session_state.user_email))
+                conn.commit()
+                conn.close()
+                st.success("Profile updated successfully!")
+                st.rerun()
+
+    # ==================== CHAT & MESSAGING SYSTEM ====================
+    elif choice == "💬 Messages / Inbox":
+        st.markdown("<h2>Fiverr-Style Direct Inbox & Deal Chat</h2>", unsafe_allow_html=True)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM users WHERE name != ?", (st.session_state.current_user,))
+        all_users = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        if not all_users:
+            st.info("No other users available to chat with.")
+        else:
+            selected_chat_user = st.selectbox("Select User to Chat With", all_users)
+            
+            st.markdown("---")
+            st.subheader(f"Conversation with {selected_chat_user}")
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT sender, message, timestamp FROM messages 
+                WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+                ORDER BY timestamp ASC
+            """, (st.session_state.current_user, selected_chat_user, selected_chat_user, st.session_state.current_user))
+            messages = cursor.fetchall()
+            conn.close()
+            
+            chat_container = st.container()
+            with chat_container:
+                if not messages:
+                    st.info(f"No messages yet with {selected_chat_user}. Start the conversation below!")
+                else:
+                    for sender, msg, time in messages:
+                        if sender == st.session_state.current_user:
+                            st.markdown(f"""
+                            <div style="overflow: auto; margin-bottom: 10px;">
+                                <div class="chat-bubble-sent"><b>You:</b> {msg}<br><span style="font-size: 10px; opacity: 0.7;">{time}</span></div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div style="overflow: auto; margin-bottom: 10px;">
+                                <div class="chat-bubble-recv"><b>{sender}:</b> {msg}<br><span style="font-size: 10px; opacity: 0.7;">{time}</span></div>
+                            </div>
+                            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.form("chat_form", clear_on_submit=True):
+                new_msg = st.text_input("Type message...", placeholder="Discuss project details or custom budget...")
+                send_btn = st.form_submit_button("Send Message 🚀")
+                if send_btn:
+                    if new_msg.strip():
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
+                                     (st.session_state.current_user, selected_chat_user, new_msg))
+                        conn.commit()
+                        conn.close()
+                        st.rerun()
+                    else:
+                        st.warning("Message cannot be blank.")
 
     # ==================== CLIENT: MY ORDERS ====================
     elif choice == "🛒 My Orders":
@@ -297,8 +445,13 @@ else:
         st.markdown("<h2>Freelancer Command Center</h2>", unsafe_allow_html=True)
         
         c1, c2 = st.columns(2)
-        c1.metric("Available Earnings", f"${user_data[4]:,.2f}")
-        c2.metric("Active Escrow Orders", len([o for o in sqlite3.connect("global_marketplace.db").cursor().execute("SELECT * FROM orders WHERE worker_name = ? AND status = 'In Progress'", (st.session_state.current_user,)).fetchall()]))
+        c1.metric("Available Earnings", f"${user_data[8]:,.2f}")
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        active_count = len(cursor.execute("SELECT * FROM orders WHERE worker_name = ? AND status = 'In Progress'", (st.session_state.current_user,)).fetchall())
+        conn.close()
+        c2.metric("Active Escrow Orders", active_count)
         
         st.markdown("---")
         st.subheader("Client Orders Assigned To You")
@@ -316,7 +469,7 @@ else:
                 st.markdown(f"""
                 <div class="fiverr-card">
                     <h4>Order #{o_id}: {title}</h4>
-                    <p><b>Client:</b> {client} | <b>Total:</b> ${price} | <b>Your Payout (85%):</b> <b>${payout}</b> | <b>Status:</b> <code>{status}</code></p>
+                    <p><b>Client:</b> {client} | <b>Total:</b> ${price} | <b>Your Payout:</b> <b>${payout}</b> | <b>Status:</b> <code>{status}</code></p>
                     <p><b>Requirements:</b> {reqs}</p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -359,14 +512,14 @@ else:
                              (st.session_state.user_email, st.session_state.current_user, title, cat, price, desc, days, image_path))
                 conn.commit()
                 conn.close()
-                st.success("Gig successfully published with image!")
+                st.success("Gig successfully published!")
 
     # ==================== WORKER: PAYOUT SETTINGS ====================
     elif choice == "🏦 Payout Settings":
         st.markdown("<h2>Payout Accounts (Local & International)</h2>", unsafe_allow_html=True)
         st.write("Configure your preferred withdrawal method for your earnings.")
         
-        existing_info = user_data[5] if user_data[5] else "Not Set"
+        existing_info = user_data[9] if user_data[9] else "Not Set"
         
         with st.form("payout_form"):
             method = st.selectbox("Select Payout Method", ["JazzCash", "EasyPaisa", "Bank Account (IBAN)", "PayPal"])
@@ -416,7 +569,7 @@ else:
     elif choice == "👥 Manage Users":
         st.markdown("<h2>All Platform Users</h2>", unsafe_allow_html=True)
         conn = get_connection()
-        users_df = pd.read_sql("SELECT email, role, name, wallet, payout_info FROM users", conn)
+        users_df = pd.read_sql("SELECT email, role, name, phone, country, wallet FROM users", conn)
         st.dataframe(users_df, use_container_width=True)
         conn.close()
         
