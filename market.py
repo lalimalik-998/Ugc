@@ -78,9 +78,10 @@ def init_db():
     
     conn.commit()
     
-    cursor.execute("SELECT * FROM users_v3 WHERE role = 'Admin'")
+    # Custom Super Admin Setup
+    cursor.execute("SELECT * FROM users_v3 WHERE email = 'admin@skillbridge.com'")
     if not cursor.fetchone():
-        cursor.execute("INSERT OR IGNORE INTO users_v3 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+        cursor.execute("INSERT OR REPLACE INTO users_v3 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                        ("admin@skillbridge.com", hash_password("admin123"), "Admin", "Platform Admin", "+1234567890", "Global", "System Administrator", "", 0.0, "Master Ledger"))
         conn.commit()
     conn.close()
@@ -331,17 +332,31 @@ else:
                                          (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", reqs, "Pending Delivery"))
                             cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
                             
-                            auto_msg = f"Hello! I just placed an order for your gig '{title}'. Requirements: {reqs}"
+                            auto_msg = f"Hello! I just ordered your gig: '{title}' (${price}). Requirements: {reqs}"
                             cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
                                          (st.session_state.current_user, w_name, auto_msg))
                             
                             conn.commit()
                             conn.close()
-                            st.success("Order placed & message sent to seller! Go to 'My Orders' or 'Messages / Inbox' to chat.")
+                            
+                            st.session_state.chat_target = w_name
+                            st.success("Order placed successfully! Redirecting to chat with seller...")
+                            st.rerun()
+                            
                     with col_b2:
                         if st.button(f"💬 Chat with {w_name}", key=f"chat_seller_{g_id}"):
                             st.session_state.chat_target = w_name
-                            st.success(f"Seller selected for chat! Please click on 'Messages / Inbox' in the sidebar.")
+                            
+                            # Send initial gig reference message automatically
+                            conn = get_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
+                                         (st.session_state.current_user, w_name, f"Hi, I'm interested in your gig: '{title}' (${price})"))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"Opening direct chat with {w_name}...")
+                            st.rerun()
 
     # ==================== EDIT PROFILE (PHOTO & BIO) ====================
     elif choice == "👤 Edit Profile":
@@ -380,17 +395,18 @@ else:
         
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM users_v3 WHERE name != ?", (st.session_state.current_user,))
+        # Exclude Platform Admin completely from normal user chats
+        cursor.execute("SELECT name FROM users_v3 WHERE name != ? AND role != 'Admin'", (st.session_state.current_user,))
         all_users = [row[0] for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT worker_name FROM gigs WHERE worker_name != ?", (st.session_state.current_user,))
+        cursor.execute("SELECT DISTINCT worker_name FROM gigs WHERE worker_name != ? AND worker_name != 'Platform Admin'", (st.session_state.current_user,))
         gig_workers = [row[0] for row in cursor.fetchall()]
         
         combined_users = list(set(all_users + gig_workers))
         conn.close()
         
         if not combined_users:
-            st.info("No other users or freelancers available to chat with yet. Create a gig from a freelancer account first!")
+            st.info("No other freelancers or clients available to chat with yet.")
         else:
             default_index = 0
             if st.session_state.chat_target in combined_users:
@@ -474,7 +490,8 @@ else:
                 with col_o1:
                     if st.button(f"💬 Chat with Seller ({worker})", key=f"order_chat_{o_id}"):
                         st.session_state.chat_target = worker
-                        st.success(f"Seller selected for chat! Please click on 'Messages / Inbox' in the sidebar.")
+                        st.success(f"Redirecting to chat with {worker}...")
+                        st.rerun()
                 with col_o2:
                     if status == "Delivered":
                         if st.button(f"✅ Accept Delivery & Release Funds", key=f"accept_{o_id}"):
@@ -523,7 +540,8 @@ else:
                 
                 if st.button(f"💬 Chat with Client ({client})", key=f"worker_chat_{o_id}"):
                     st.session_state.chat_target = client
-                    st.success(f"Client selected! Go to 'Messages / Inbox' in the sidebar.")
+                    st.success(f"Redirecting to chat with {client}...")
+                    st.rerun()
                 
                 if status == "In Progress":
                     delivery_text = st.text_input(f"Submit work link/message for Order #{o_id}", key=f"del_{o_id}")
