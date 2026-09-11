@@ -341,7 +341,7 @@ else:
                     with col_b2:
                         if st.button(f"💬 Chat with {w_name}", key=f"chat_seller_{g_id}"):
                             st.session_state.chat_target = w_name
-                            st.info(f"Click on 'Messages / Inbox' in the sidebar to talk with {w_name}!")
+                            st.success(f"Seller selected for chat! Please click on 'Messages / Inbox' in the sidebar.")
 
     # ==================== EDIT PROFILE (PHOTO & BIO) ====================
     elif choice == "👤 Edit Profile":
@@ -382,16 +382,21 @@ else:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM users_v3 WHERE name != ?", (st.session_state.current_user,))
         all_users = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT DISTINCT worker_name FROM gigs WHERE worker_name != ?", (st.session_state.current_user,))
+        gig_workers = [row[0] for row in cursor.fetchall()]
+        
+        combined_users = list(set(all_users + gig_workers))
         conn.close()
         
-        if not all_users:
-            st.info("No other users available to chat with.")
+        if not combined_users:
+            st.info("No other users or freelancers available to chat with yet. Create a gig from a freelancer account first!")
         else:
             default_index = 0
-            if st.session_state.chat_target in all_users:
-                default_index = all_users.index(st.session_state.chat_target)
+            if st.session_state.chat_target in combined_users:
+                default_index = combined_users.index(st.session_state.chat_target)
                 
-            selected_chat_user = st.selectbox("Select User to Chat With", all_users, index=default_index)
+            selected_chat_user = st.selectbox("Select User to Chat With", combined_users, index=default_index)
             st.session_state.chat_target = selected_chat_user
             
             st.markdown("---")
@@ -578,7 +583,7 @@ else:
                     st.error("Please fill in all payment details.")
                 else:
                     formatted_payout = f"Method: {method} | Holder: {account_holder} | Account/IBAN: {account_number}"
-                    conn = get_content() if 'get_content' in globals() else get_connection()
+                    conn = get_connection()
                     cursor = conn.cursor()
                     cursor.execute("UPDATE users_v3 SET payout_info = ? WHERE email = ?", (formatted_payout, st.session_state.user_email))
                     conn.commit()
