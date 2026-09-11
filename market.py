@@ -90,13 +90,10 @@ init_db()
 # --- ADVANCED CUSTOM CSS FOR FIVERR LOOK ---
 st.markdown("""
     <style>
-    /* Main App Background */
     .stApp {
         background-color: #f4f6f8;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    
-    /* Sidebar Styling */
     [data-testid="stSidebar"] {
         background-color: #0b221e;
         color: white;
@@ -107,8 +104,6 @@ st.markdown("""
     [data-testid="stSidebar"] hr {
         border-color: rgba(255, 255, 255, 0.15);
     }
-    
-    /* Fiverr Cards Styling */
     .fiverr-card {
         background-color: white;
         padding: 24px;
@@ -123,8 +118,6 @@ st.markdown("""
         box-shadow: 0 10px 20px rgba(0, 112, 83, 0.1);
         border-color: #0b7053;
     }
-    
-    /* Hero Banner */
     .hero-banner {
         background: linear-gradient(135deg, #0b7053 0%, #013b28 100%);
         padding: 50px;
@@ -134,8 +127,6 @@ st.markdown("""
         box-shadow: 0 10px 25px rgba(11, 112, 83, 0.2);
         text-align: center;
     }
-    
-    /* Buttons */
     .stButton>button {
         background-color: #0b7053;
         color: white;
@@ -149,8 +140,6 @@ st.markdown("""
         background-color: #095c43;
         color: white;
     }
-
-    /* Chat Bubbles */
     .chat-bubble-sent {
         background-color: #0b7053;
         color: white;
@@ -186,6 +175,8 @@ if "user_role" not in st.session_state:
     st.session_state.user_role = None
 if "admin_commission_rate" not in st.session_state:
     st.session_state.admin_commission_rate = 0.15
+if "chat_target" not in st.session_state:
+    st.session_state.chat_target = None
 
 # ==================== AUTHENTICATION / LOGIN PAGE ====================
 if not st.session_state.logged_in:
@@ -328,19 +319,29 @@ else:
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     reqs = st.text_area(f"Project Requirements for Gig #{g_id}", placeholder="Describe what you want...", key=f"req_{g_id}")
-                    if st.button(f"Order Now (${price})", key=f"buy_{g_id}"):
-                        admin_cut = price * st.session_state.admin_commission_rate
-                        worker_cut = price - admin_cut
-                        
-                        conn = get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                     (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", reqs, "Pending Delivery"))
-                        cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
-                        conn.commit()
-                        conn.close()
-                        st.success("Order placed successfully! Funds secured in Escrow.")
-                        st.rerun()
+                    col_b1, col_b2 = st.columns([1, 1])
+                    with col_b1:
+                        if st.button(f"Order Now (${price})", key=f"buy_{g_id}"):
+                            admin_cut = price * st.session_state.admin_commission_rate
+                            worker_cut = price - admin_cut
+                            
+                            conn = get_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                         (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", reqs, "Pending Delivery"))
+                            cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
+                            
+                            auto_msg = f"Hello! I just placed an order for your gig '{title}'. Requirements: {reqs}"
+                            cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
+                                         (st.session_state.current_user, w_name, auto_msg))
+                            
+                            conn.commit()
+                            conn.close()
+                            st.success("Order placed & message sent to seller! Go to 'My Orders' or 'Messages / Inbox' to chat.")
+                    with col_b2:
+                        if st.button(f"💬 Chat with {w_name}", key=f"chat_seller_{g_id}"):
+                            st.session_state.chat_target = w_name
+                            st.info(f"Click on 'Messages / Inbox' in the sidebar to talk with {w_name}!")
 
     # ==================== EDIT PROFILE (PHOTO & BIO) ====================
     elif choice == "👤 Edit Profile":
@@ -386,7 +387,12 @@ else:
         if not all_users:
             st.info("No other users available to chat with.")
         else:
-            selected_chat_user = st.selectbox("Select User to Chat With", all_users)
+            default_index = 0
+            if st.session_state.chat_target in all_users:
+                default_index = all_users.index(st.session_state.chat_target)
+                
+            selected_chat_user = st.selectbox("Select User to Chat With", all_users, index=default_index)
+            st.session_state.chat_target = selected_chat_user
             
             st.markdown("---")
             st.subheader(f"Conversation with {selected_chat_user}")
@@ -459,16 +465,22 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if status == "Delivered":
-                    if st.button(f"✅ Accept Delivery & Release Funds for Order #{o_id}", key=f"accept_{o_id}"):
-                        conn = get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE orders SET status = 'Completed' WHERE id = ?", (o_id,))
-                        cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE name = ?", (payout, worker))
-                        conn.commit()
-                        conn.close()
-                        st.success("Order completed! Funds released to worker.")
-                        st.rerun()
+                col_o1, col_o2 = st.columns([1, 1])
+                with col_o1:
+                    if st.button(f"💬 Chat with Seller ({worker})", key=f"order_chat_{o_id}"):
+                        st.session_state.chat_target = worker
+                        st.success(f"Seller selected for chat! Please click on 'Messages / Inbox' in the sidebar.")
+                with col_o2:
+                    if status == "Delivered":
+                        if st.button(f"✅ Accept Delivery & Release Funds", key=f"accept_{o_id}"):
+                            conn = get_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE orders SET status = 'Completed' WHERE id = ?", (o_id,))
+                            cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE name = ?", (payout, worker))
+                            conn.commit()
+                            conn.close()
+                            st.success("Order completed! Funds released to worker.")
+                            st.rerun()
 
     # ==================== WORKER: DASHBOARD & ORDERS ====================
     elif choice == "📊 Dashboard" or choice == "💼 Manage Orders":
@@ -503,6 +515,10 @@ else:
                     <p><b>Requirements:</b> {reqs}</p>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                if st.button(f"💬 Chat with Client ({client})", key=f"worker_chat_{o_id}"):
+                    st.session_state.chat_target = client
+                    st.success(f"Client selected! Go to 'Messages / Inbox' in the sidebar.")
                 
                 if status == "In Progress":
                     delivery_text = st.text_input(f"Submit work link/message for Order #{o_id}", key=f"del_{o_id}")
@@ -562,7 +578,7 @@ else:
                     st.error("Please fill in all payment details.")
                 else:
                     formatted_payout = f"Method: {method} | Holder: {account_holder} | Account/IBAN: {account_number}"
-                    conn = get_connection()
+                    conn = get_content() if 'get_content' in globals() else get_connection()
                     cursor = conn.cursor()
                     cursor.execute("UPDATE users_v3 SET payout_info = ? WHERE email = ?", (formatted_payout, st.session_state.user_email))
                     conn.commit()
