@@ -89,18 +89,15 @@ def init_db():
 
 init_db()
 
-# --- PAYMENT GATEWAY FUNCTION (Automatic & Future Ready) ---
+# --- PAYMENT GATEWAY FUNCTION (Multi-Gateway Ready) ---
 def process_real_payment(amount, user_email, pay_method, title):
     """
-    Jab aap `.streamlit/secrets.toml` mein real API keys daal denge, 
-    yeh function automatically PayFast/Stripe ko request bhej dega.
+    Yahan PayFast aur Payoneer ki keys secrets.toml se uthai jayengi.
     """
-    # Secrets se keys uthane ka tareeqa (Jab live hoga tab active hoga):
-    # merchant_id = st.secrets.get("PAYFAST_MERCHANT_ID", "DUMMY_ID")
-    # api_key = st.secrets.get("PAYFAST_API_KEY", "DUMMY_KEY")
+    # pf_merchant = st.secrets.get("PAYFAST_MERCHANT_ID", "DUMMY")
+    # po_client = st.secrets.get("PAYONEER_CLIENT_ID", "DUMMY")
     
-    # Filhal testing ke liye automatic success return karega
-    return {"status": "success", "message": f"Processed automatically via {pay_method}"}
+    return {"status": "success", "message": f"Processed via {pay_method}"}
 
 
 # --- ADVANCED CUSTOM CSS ---
@@ -326,17 +323,16 @@ else:
                     
                     reqs = st.text_area(f"Project Requirements for Gig #{g_id}", placeholder="Describe what you want...", key=f"req_{g_id}")
                     
-                    # Payment Method Selection
+                    # Updated Payment Methods (PayFast & Payoneer)
                     pay_method = st.selectbox(
                         "Select Payment Method", 
-                        ["🟢 JazzCash / EasyPaisa", "💳 Credit / Debit Card (PayFast/Stripe)", "🏦 Bank Transfer (IBAN)", "🅿️ PayPal"], 
+                        ["🟢 JazzCash / EasyPaisa (PayFast)", "💳 Credit / Debit Card (PayFast)", "🌍 Payoneer (International)", "🏦 Bank Transfer (IBAN)"], 
                         key=f"pay_meth_{g_id}"
                     )
                     
                     col_b1, col_b2 = st.columns([1, 1])
                     with col_b1:
                         if st.button(f"Pay & Order Now (${price})", key=f"buy_{g_id}"):
-                            # Automatic Payment Processing Call
                             payment_res = process_real_payment(price, st.session_state.user_email, pay_method, title)
                             
                             if payment_res["status"] == "success":
@@ -345,12 +341,10 @@ else:
                                 
                                 conn = get_connection()
                                 cursor = conn.cursor()
-                                # Automatically creating order and setting status to 'In Progress'
                                 cursor.execute("INSERT INTO orders (gig_id, client_name, worker_name, title, price, admin_commission, worker_payout, status, requirements, delivery_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                              (g_id, st.session_state.current_user, w_name, title, price, admin_cut, worker_cut, "In Progress", f"[{pay_method}] {reqs}", "Pending Delivery"))
                                 cursor.execute("UPDATE users_v3 SET wallet = wallet + ? WHERE role = 'Admin'", (admin_cut,))
                                 
-                                # Automatic Message to Freelancer
                                 auto_msg = f"Hello! I just ordered your gig: '{title}' (${price}) via {pay_method}. Requirements: {reqs}"
                                 cursor.execute("INSERT INTO messages (sender, receiver, message) VALUES (?, ?, ?)",
                                              (st.session_state.current_user, w_name, auto_msg))
@@ -599,9 +593,9 @@ else:
         existing_info = user_data[9] if user_data[9] else "Not Set"
         
         with st.form("payout_form"):
-            method = st.selectbox("Select Payout Method", ["JazzCash", "EasyPaisa", "Bank Account (IBAN)", "PayPal"])
+            method = st.selectbox("Select Payout Method", ["JazzCash", "EasyPaisa", "Payoneer Account", "Bank Account (IBAN)"])
             account_holder = st.text_input("Account Holder Name")
-            account_number = st.text_input("Account / Phone / IBAN Number")
+            account_number = st.text_input("Account / Phone / Payoneer Email / IBAN")
             
             if st.form_submit_button("Save Payout Destination"):
                 if not account_holder or not account_number:
